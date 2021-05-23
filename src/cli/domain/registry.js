@@ -31,15 +31,44 @@ module.exports = function(opts) {
       if (registry.slice(registry.length - 1) !== '/') {
         registry += '/';
       }
-
       request(
         {
           url: registry,
           headers: requestsHeaders,
           json: true
         },
-        (err, apiResponse) => {
-          if (err || !apiResponse) {
+        (err, apiResponse, details) => {
+          if (details.response.statusCode === 302 && details.response.headers.location) {
+            request(
+              {
+                url: details.response.headers.location,
+                headers: requestsHeaders,
+                json: true
+              },
+              (err, apiResponse, details) => {
+                if (err || !apiResponse) {
+                  return callback('oc registry not available', null);
+                } else if (apiResponse.type !== 'oc-registry') {
+                  return callback('not a valid oc registry', null);
+                }
+      
+                fs.readJson(settings.configFile.src, (err, res) => {
+                  if (err) {
+                    res = {};
+                  }
+      
+                  if (!res.registries) {
+                    res.registries = [];
+                  }
+      
+                  if (!_.includes(res.registries, registry)) {
+                    res.registries.push(registry);
+                  }
+      
+                  fs.writeJson(settings.configFile.src, res, callback);
+              });
+            });
+          } else if (err || !apiResponse) {
             return callback('oc registry not available', null);
           } else if (apiResponse.type !== 'oc-registry') {
             return callback('not a valid oc registry', null);
